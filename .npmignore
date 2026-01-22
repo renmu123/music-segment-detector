@@ -1,0 +1,12 @@
+src/
+temp/
+output/
+*.log
+*.mp4
+*.wav
+*.mp3
+.vscode/
+.DS_Store
+tsconfig.json
+pnpm-lock.yaml
+node_modules/
