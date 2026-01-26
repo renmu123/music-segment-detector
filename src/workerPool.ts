@@ -70,6 +70,8 @@ export class WorkerPool {
 
       if (startIdx >= totalWindows) break;
 
+      // 不创建副本，直接传递原始数据的引用
+      // Worker 只读取需要的部分，不修改原始数据
       tasks.push({
         channelData,
         windowSize,
@@ -158,7 +160,8 @@ export class WorkerPool {
         worker.on("message", handleMessage);
         worker.on("error", handleError);
 
-        // 发送任务
+        // 发送任务，不转移channelData的所有权
+        // 多个worker可以共享同一个ArrayBuffer进行只读访问
         worker.postMessage(task);
       });
     });

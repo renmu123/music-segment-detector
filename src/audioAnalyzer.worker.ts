@@ -98,6 +98,7 @@ parentPort.on("message", (msg) => {
       const spectralRolloff = meydaFeatures?.spectralRolloff || 0;
       const spectralFlatness = meydaFeatures?.spectralFlatness || 0;
 
+      // 将mfcc转换为Float32Array以便后续可以转移内存
       features.push({
         timestamp,
         rms,
@@ -105,7 +106,7 @@ parentPort.on("message", (msg) => {
         zcr,
         spectralEnergy,
         variance,
-        mfcc,
+        mfcc: new Float32Array(mfcc),
         spectralCentroid,
         spectralRolloff,
         spectralFlatness,
@@ -121,11 +122,23 @@ parentPort.on("message", (msg) => {
       }
     }
 
-    // 发送最终结果
-    parentPort!.postMessage({
-      type: "result",
-      features,
-    });
+    // 发送最终结果，转移所有 MFCC 数组的 ArrayBuffer 以减少内存占用
+    const transferables: ArrayBuffer[] = [];
+
+    // 收集所有可转移的 ArrayBuffer
+    for (const feature of features) {
+      if (feature.mfcc instanceof Float32Array) {
+        transferables.push(feature.mfcc.buffer as ArrayBuffer);
+      }
+    }
+
+    parentPort!.postMessage(
+      {
+        type: "result",
+        features,
+      },
+      transferables,
+    );
   } catch (error) {
     // 发送错误信息
     parentPort!.postMessage({

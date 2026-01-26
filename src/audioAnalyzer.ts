@@ -10,7 +10,7 @@ export interface AudioFeatures {
   zcr: number; // 过零率
   spectralEnergy: number; // 高频能量
   variance: number; // 能量方差（音乐通常更稳定）
-  mfcc: number[]; // MFCC系数（前13个）
+  mfcc: number[] | Float32Array; // MFCC系数（前13个）
   spectralCentroid: number; // 频谱质心（音色明亮度）
   spectralRolloff: number; // 频谱滚降（高频能量分布）
   spectralFlatness: number; // 频谱平坦度（噪声vs音调）
@@ -31,8 +31,14 @@ async function readWavFile(
   const audioData = await WavDecoder.decode(buffer.buffer);
 
   // 如果是多声道，只取第一个声道
-  const channelData = audioData.channelData[0];
+  const originalData = audioData.channelData[0];
   const sampleRate = audioData.sampleRate;
+
+  // 将数据转换为SharedArrayBuffer以在Worker间共享
+  const dataSize = originalData.length * originalData.BYTES_PER_ELEMENT;
+  const sharedBuffer = new SharedArrayBuffer(dataSize);
+  const channelData = new Float32Array(sharedBuffer);
+  channelData.set(originalData);
 
   return { sampleRate, channelData };
 }
@@ -102,13 +108,15 @@ async function analyzeAudioParallel(
 ): Promise<AudioFeatures[]> {
   const pool = new WorkerPool({ numWorkers });
   try {
-    return await pool.execute(
+    const result = await pool.execute(
       channelData,
       windowSize,
       hopSize,
       sampleRate,
       onProgress,
     );
+
+    return result;
   } catch (error) {
     // Worker 失败时回退到单线程模式
     console.warn(
