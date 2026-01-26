@@ -1,6 +1,6 @@
 {
   "name": "music-segment-detector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Audio music segment detection library - Automatically detect music segments from WAV audio files",
   "type": "module",
   "main": "dist/index.js",

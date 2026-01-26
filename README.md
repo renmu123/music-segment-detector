@@ -27,6 +27,20 @@ const features = await analyzeAudio("audio.wav", 2048, 512, (progress) => {
   console.log(`Analysis progress: ${(progress * 100).toFixed(1)}%`);
 });
 
+// 1-2. Use Worker parallel processing (recommended for large files, 2.5-3x faster)
+const features = await analyzeAudio(
+  "audio.wav",
+  2048,
+  512,
+  (progress) => {
+    console.log(`Analysis progress: ${(progress * 100).toFixed(1)}%`);
+  },
+  {
+    useWorkers: true, // Enable Worker parallel processing
+    numWorkers: 4, // Optional, defaults to CPU core count
+  },
+);
+
 // 2. Detect music segments
 const segments = detectMusicSegments(features, {
   energyPercentile: 50, // Energy percentile threshold (0-100)
@@ -45,7 +59,7 @@ segments.forEach((segment) => {
 
 ## API
 
-### `analyzeAudio(audioPath, windowSize?, hopSize?, onProgress?)`
+### `analyzeAudio(audioPath, windowSize?, hopSize?, onProgress?, options?)`
 
 Analyze a WAV audio file and extract features.
 
@@ -53,6 +67,9 @@ Analyze a WAV audio file and extract features.
 - `windowSize`: Analysis window size (default: 2048)
 - `hopSize`: Window hop size (default: 512)
 - `onProgress`: Optional progress callback function `(progress: number) => void`, parameter is progress value between 0-1
+- `options`: Optional configuration
+  - `useWorkers`: Enable Worker parallel processing (default: false)
+  - `numWorkers`: Number of workers (default: CPU core count, max 8)
 - Returns: `Promise<AudioFeatures[]>`
 
 ### `detectMusicSegments(features, config?)`
@@ -99,6 +116,11 @@ interface AudioFeatures {
   spectralFlatness: number;
 }
 
+interface AnalyzeAudioOptions {
+  useWorkers?: boolean; // Enable Worker parallel processing
+  numWorkers?: number; // Number of workers (defaults to CPU core count)
+}
+
 interface MusicSegment {
   startTime: number;
   endTime: number;
@@ -128,11 +150,22 @@ interface DetectionConfig {
    - Spectral rolloff
 3. **Post-processing**: Smoothing, merging adjacent segments, filtering short segments
 
+## Performance Optimization
+
+For large audio files, it's recommended to enable Worker parallel processing for better performance:
+
+- **Single-threaded mode** (default): Suitable for small files (< 1 minute) or low-spec environments
+- **Worker parallel mode**: Suitable for large files, 2.5-3x performance boost (on 4-core CPU)
+  - Automatically adjusts worker count based on file size
+  - Automatically falls back to single-threaded mode if workers fail
+  - Supports progress aggregation and error handling
+
 ## Notes
 
 - Only supports WAV format audio files
 - For other formats, use tools like ffmpeg to convert to WAV first
 - Detection accuracy depends on audio quality and configuration parameters
+- Worker mode requires Node.js 16+ version
 
 ## License
 

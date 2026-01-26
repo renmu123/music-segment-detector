@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import * as WavDecoder from "wav-decoder";
 import Meyda from "meyda";
+import { WorkerPool } from "./workerPool.js";
 
 export interface AudioFeatures {
   timestamp: number;
@@ -13,6 +14,11 @@ export interface AudioFeatures {
   spectralCentroid: number; // 频谱质心（音色明亮度）
   spectralRolloff: number; // 频谱滚降（高频能量分布）
   spectralFlatness: number; // 频谱平坦度（噪声vs音调）
+}
+
+export interface AnalyzeAudioOptions {
+  useWorkers?: boolean; // 是否使用 Worker 并行处理
+  numWorkers?: number; // Worker 数量（默认为 CPU 核心数）
 }
 
 /**
@@ -84,19 +90,51 @@ function calculateVariance(samples: Float32Array, mean: number): number {
 }
 
 /**
- * 计算音频特征
- * @param audioPath WAV 音频文件路径
- * @param windowSize 分析窗口大小（样本数）
- * @param hopSize 窗口跳跃大小（样本数）
- * @param onProgress 进度回调函数，参数为 0-1 之间的进度值
+ * 使用 Worker 并行计算音频特征
  */
-export async function analyzeAudio(
-  audioPath: string,
-  windowSize: number = 2048,
-  hopSize: number = 512,
+async function analyzeAudioParallel(
+  channelData: Float32Array,
+  sampleRate: number,
+  windowSize: number,
+  hopSize: number,
   onProgress?: (progress: number) => void,
+  numWorkers?: number,
 ): Promise<AudioFeatures[]> {
-  const { sampleRate, channelData } = await readWavFile(audioPath);
+  const pool = new WorkerPool({ numWorkers });
+  try {
+    return await pool.execute(
+      channelData,
+      windowSize,
+      hopSize,
+      sampleRate,
+      onProgress,
+    );
+  } catch (error) {
+    // Worker 失败时回退到单线程模式
+    console.warn(
+      "Worker parallel processing failed, falling back to single-threaded mode:",
+      error,
+    );
+    return analyzeAudioSingleThread(
+      channelData,
+      sampleRate,
+      windowSize,
+      hopSize,
+      onProgress,
+    );
+  }
+}
+
+/**
+ * 单线程模式计算音频特征
+ */
+function analyzeAudioSingleThread(
+  channelData: Float32Array,
+  sampleRate: number,
+  windowSize: number,
+  hopSize: number,
+  onProgress?: (progress: number) => void,
+): AudioFeatures[] {
   const features: AudioFeatures[] = [];
 
   // 滑动窗口分析
@@ -159,6 +197,45 @@ export async function analyzeAudio(
   }
 
   return features;
+}
+
+/**
+ * 计算音频特征
+ * @param audioPath WAV 音频文件路径
+ * @param windowSize 分析窗口大小（样本数）
+ * @param hopSize 窗口跳跃大小（样本数）
+ * @param onProgress 进度回调函数，参数为 0-1 之间的进度值
+ * @param options 可选配置项，包括是否使用 Worker 并行处理
+ */
+export async function analyzeAudio(
+  audioPath: string,
+  windowSize: number = 2048,
+  hopSize: number = 512,
+  onProgress?: (progress: number) => void,
+  options?: AnalyzeAudioOptions,
+): Promise<AudioFeatures[]> {
+  const { sampleRate, channelData } = await readWavFile(audioPath);
+
+  // 如果启用 Worker 并行处理
+  if (options?.useWorkers) {
+    return analyzeAudioParallel(
+      channelData,
+      sampleRate,
+      windowSize,
+      hopSize,
+      onProgress,
+      options.numWorkers,
+    );
+  }
+
+  // 默认使用单线程模式
+  return analyzeAudioSingleThread(
+    channelData,
+    sampleRate,
+    windowSize,
+    hopSize,
+    onProgress,
+  );
 }
 
 /**

@@ -2,6 +2,7 @@
 export {
   analyzeAudio,
   AudioFeatures,
+  AnalyzeAudioOptions,
   getFeatureStats,
 } from "./audioAnalyzer.js";
 export {
