@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import * as WavDecoder from "wav-decoder";
+import wav from "./wav.js";
 import Meyda from "meyda";
 import { WorkerPool } from "./workerPool.js";
 
@@ -28,17 +28,15 @@ async function readWavFile(
   filePath: string,
 ): Promise<{ sampleRate: number; channelData: Float32Array }> {
   const buffer = await fs.readFile(filePath);
-  const audioData = await WavDecoder.decode(buffer.buffer);
+  const audioData = wav.decode(buffer);
+
+  if (!audioData) {
+    throw new Error("Failed to decode WAV file");
+  }
 
   // 如果是多声道，只取第一个声道
-  const originalData = audioData.channelData[0];
+  const channelData = audioData.channelData[0];
   const sampleRate = audioData.sampleRate;
-
-  // 将数据转换为SharedArrayBuffer以在Worker间共享
-  const dataSize = originalData.length * originalData.BYTES_PER_ELEMENT;
-  const sharedBuffer = new SharedArrayBuffer(dataSize);
-  const channelData = new Float32Array(sharedBuffer);
-  channelData.set(originalData);
 
   return { sampleRate, channelData };
 }
